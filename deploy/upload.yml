@@ -1,0 +1,75 @@
+---
+- name: Upload new version of roadmap
+  become: no
+  hosts: roadmap
+  vars:
+    project_upload: "{{ project_root }}/master"
+    current_path: "{{ project_root }}/current"
+    public_path: "{{ project_root }}/public_html"
+    release_path: "{{ project_upload }}/{{ deploy_directory }}"
+  tasks:
+    - name: Register timestamp
+      shell: date +%Y_%m_%d_%H_%M_%S
+      register: timestamp
+    - name: Register dest dir
+      set_fact: "deploy_directory={{ timestamp.stdout }}"
+    - name: Debugging deployment directory
+      debug:
+        msg: "Deployment directory: {{ deploy_directory }}"
+
+    - name: Create project root path
+      file:
+        state: directory
+        path: "{{ project_root }}"
+
+    - name: Create upload folder
+      file:
+        state: directory
+        path: "{{ project_upload }}"
+
+    - name: Create artifact folder for PHP
+      file:
+        state: directory
+        path: "{{ release_path }}"
+      when: release_path is defined
+
+    - name: Upload and unpack artifact
+      unarchive:
+        src: "{{ artefact_path }}"
+        dest: "{{ release_path }}"
+
+    - name: Change uploaded folder group
+      file:
+        path: "{{ release_path }}"
+        state: directory
+        mode: 0775
+        recurse: yes
+
+    - name: Remove link to old application code
+      file:
+        path: "{{ current_path }}"
+        state: absent
+
+    - name: Create link to shiny new application
+      file:
+        src: "{{ release_path }}"
+        dest: "{{ current_path }}"
+        state: link
+
+    - name: Remove link to old public application code
+      file:
+        path: "{{ public_path }}"
+        state: absent
+
+    - name: Create link to shiny new public application
+      file:
+        src: "{{ project_upload }}/{{ deploy_directory }}/site"
+        dest: "{{ public_path }}"
+        state: link
+
+    - name: Register variable with all uploaded archives
+      shell: ls
+      register: artifacts
+      args:
+        chdir: "{{ project_upload }}"
+
